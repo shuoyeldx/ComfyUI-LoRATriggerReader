@@ -762,6 +762,13 @@ python -m unittest discover -s tests -p "test_loader.py" -v
 
 ---
 
+## ⚠️ 开发与维护声明 / Development & Maintenance
+
+本插件的代码主要由生成式 AI 辅助编写。虽然作者进行了基本测试，但无法保证在所有环境和 ComfyUI 版本下都能稳定运行。本项目按“原样”提供，目前处于**随缘维护**状态，不保证及时更新或修复所有 Bug。
+遇到问题欢迎提 Issue 交流，也欢迎直接提交 PR 修复。
+
+The code for this plugin was primarily written with the assistance of generative AI. While basic testing has been conducted, stability across all environments and ComfyUI versions is not guaranteed. This project is provided "as-is" and is maintained on a best-effort basis. Feel free to open an Issue or submit a PR.
+
 ## 许可
 
-[MIT](LICENSE) —— 随便用，出问题自己负责 🙂
+[GPL v3](LICENSE) —— 随便用，出问题自己负责 🙂
