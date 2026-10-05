@@ -1,0 +1,37 @@
+# ============================================================================
+#  ComfyUI-LoRATriggerReader —— 依赖说明 (Dependency Notes)
+# ============================================================================
+#
+#  结论：本插件【不需要安装任何第三方 Python 包】。
+#
+#  为什么这里是空的？
+#  -----------------
+#  插件只使用 Python 标准库：
+#      os, sys, io, re, json, time, glob, codecs, threading, importlib,
+#      unicodedata, difflib, typing, collections
+#  以及 ComfyUI 本体自带、无需你单独安装的模块：
+#      folder_paths   —— ComfyUI 提供的模型目录索引（本插件按“软依赖”处理）
+#      server         —— ComfyUI 的 PromptServer，用于注册 HTTP 接口（软依赖）
+#      aiohttp        —— ComfyUI 本体依赖，用于写 HTTP 响应（软依赖）
+#      nodes          —— 仅在“模拟加载测试”里出现，正常运行时不需要
+#
+#  “软依赖”是什么意思？
+#  --------------------
+#  上面这些模块如果因为任何原因 import 不到（例如把 lora_scan 单独拿去跑脚本测试），
+#  插件会自己降级而不是报错：
+#      * 找不到 folder_paths → 自动改用「相对插件目录 / ComfyUI 常见目录 / 环境变量」
+#        推导 LoRA 目录，核心匹配逻辑依然可用；
+#      * 找不到 server / aiohttp → 只是不注册 HTTP 接口，节点执行完全不受影响，
+#        前端「触发词选择器」会自动回退到只显示 LoRA 名字。
+#
+#  所以：
+#      * 手动安装（git clone 到 custom_nodes）→ 什么都不用装；
+#      * ComfyUI Manager 安装 → 什么都不用装；
+#      * pip install -r requirements.txt → 合法且无副作用（空依赖清单）。
+#
+#  运行环境要求
+#  ------------
+#      Python  : >= 3.9（已在 CPython 3.12.10 / ComfyUI 0.38.0 上验证通过）
+#      ComfyUI : >= 1.0（含新前端）；老版本也能用，只是前端按钮会退化
+#      前端    : 无需额外构建步骤，web/js 下的脚本会被 ComfyUI 自动加载
+# ============================================================================

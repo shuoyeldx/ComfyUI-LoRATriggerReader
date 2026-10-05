@@ -1,0 +1,29 @@
+[project]
+name = "comfyui-lora-trigger-reader"
+version = "1.3.0"
+description = "四个 ComfyUI 节点：多重 LoRA 加载器（MODEL+CLIP 进出一把加载多个 LoRA，并输出触发词），以及三个自动/手动读取 LoRA 触发词文本的节点（顺着 MODEL 连线反查上游 LoRA，读取同名或包含其完整名字的文本文件）。"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "ComfyUI-LoRATriggerReader contributors" }]
+keywords = ["comfyui", "comfyui-nodes", "lora", "trigger-words", "prompt"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Graphics",
+]
+# 本插件零第三方依赖，详见 requirements.txt 的说明
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/shuoyeldx/ComfyUI-LoRATriggerReader"
+Repository = "https://github.com/shuoyeldx/ComfyUI-LoRATriggerReader"
+Issues = "https://github.com/shuoyeldx/ComfyUI-LoRATriggerReader/issues"
+
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = []
