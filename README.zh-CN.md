@@ -4,7 +4,7 @@
 
 [English](README.md) | **中文**
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+![license](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![deps](https://img.shields.io/badge/dependencies-%E9%9B%B6%E7%AC%AC%E4%B8%89%E6%96%B9%E4%BE%9D%E8%B5%96-brightgreen)
 ![nodes](https://img.shields.io/badge/nodes-4-orange)
@@ -94,7 +94,7 @@
 | 🛡️ 高兼容 | 使用最老的 V1 `INPUT_TYPES` 写法，同时兼容 V1 与 V3 节点 API；不用任何 V3 专属特性；前端脚本失败也不影响节点执行 |
 | 🔍 匹配可控 | 打分式匹配 + 归属校验，避免"短名字抢走别人的文本文件" |
 | 💾 智能缓存 | 文本索引缓存 8 秒，避免每个队列任务都重新扫盘；文件变了会自动让 ComfyUI 重新执行 |
-| 📝 示例与文档 | 自带示例工作流、224 个单元测试、真实目录自检脚本 |
+| 📝 示例与文档 | 自带示例工作流、228 个单元测试、真实目录自检脚本 |
 
 ---
 
@@ -128,7 +128,7 @@ git clone https://github.com/shuoyeldx/ComfyUI-LoRATriggerReader.git
 
 节点在右键菜单里的分类是 **`LoRA/TriggerReader`**。
 
-前端 JS 由根目录 `__init__.py` 里的 `WEB_DIRECTORY = "./web"` 注册；`pyproject.toml` 的 `[tool.comfy]` 里**故意不写 `web`**（两处同时注册会导致同一份前端脚本被加载两次）。
+前端 JS 由根目录 `__init__.py` 里的 `WEB_DIRECTORY = "./web"` 注册；如果要用 ComfyUI Registry 发布，`[tool.comfy]` 段里**故意不写 `web`**（两处同时注册会导致同一份前端脚本被加载两次）。
 
 ## 依赖说明
 
@@ -569,7 +569,7 @@ LoRATriggerReader v1.3.0
 - **修掉了一个真实 bug：写强度时读不到触发词。** 以前两个「自动读取」节点（`LoRATriggerReader` / `LoRATriggerReaderMulti`）的 `extra_loras` 走的是旧的 `scan.parse_lora_text`，它**从不剥离强度尾巴**，于是像 `妃咲: 0.8` 这样的短名字在包含类匹配档位全部失配、分数掉到 700 分阈值以下，触发词就空了。现在读取节点和加载器都改用 `loader.parse_specs` / `split_strengths`：`: 0.8`、`@ 0.8`、`, 0.8`、空格 `0.8`、`<lora:名:0.8>` 这些写法都能被正确剥离，`妃咲.safetensors: 0.8` 和 `妃咲.safetensors 0.8` 都能正常读出触发词。注意：**强度只用来定位文件，读触发词时会被忽略。**
 - **自动检测的触发条件变了**：以前是「`lora_list` 留空」就自动用 `model` 链路上的 LoRA；现在是**下拉框和批量文本都为空**时才自动检测，并按模型流向依次加载。
 - **加载顺序**固定为**先下拉框第 1 → 4 行（跳过 `不使用 / none`），再批量文本**；前端「🎯 选择 LoRA」按钮也改成**把前 4 个写进下拉框**、其余写进批量文本，并移除批量文本框里已经进下拉框的行。
-- 版本号升到 **1.3.0**（`lora_scan.VERSION`、根 `__init__.py` 的 `__version__`、`pyproject.toml` 的 `version`、前端 JS 的 `VERSION`、帮助文档里的报告示例全部同步），单元测试增加到 **224** 个（`python -m unittest discover -s tests`）。
+- 版本号升到 **1.3.0**（`lora_scan.VERSION`、根 `__init__.py` 的 `__version__`、`pyproject.toml` 的 `version`、前端 JS 的 `VERSION`、帮助文档里的报告示例全部同步），单元测试增加到 **228** 个（`python -m unittest discover -s tests`）。
 
 ---
 
@@ -584,6 +584,9 @@ LoRATriggerReader v1.3.0
 - 显示「未匹配」→ 文件名不符合命名规则，参考上面的[打分表](#触发词文件命名规则重点)；
 - 显示「空文件」→ 你的 txt 是 0 字节，需要自己补内容；
 - 显示「找不到文件」→ 你选的 LoRA 名字在目录里找不到（可能是缓存），勾一下 `refresh_cache` 或者点前端「重新扫描」。
+
+**Q：节点底部显示「检测到 1 个 LoRA: [object Object]」？**
+这是第三方 LoRA 节点的控件值不是字符串造成的（例如 rgthree 的 **Power Lora Loader**，一个输入里存的是 `{on: true, lora: "x.safetensors", strength: 0.8}` 这样的对象）。**v1.3 已修复**：前端和后端都会按字段名（`lora` / `name` / `value` / `path`…）解析这类结构化值，并跳过 `on` / `strength` 这类开关与权重字段，所以状态行与 `report` 里显示的都是真实文件名，不会再把对象 `String()` 成 `[object Object]`。碰到这种节点时刷新一下页面（重启 ComfyUI 或重新加载前端）即可生效。
 
 **Q：节点没有检测到 LoRA 怎么办？**
 先看节点底部的状态行和 `report` 的第 2 行：
@@ -658,7 +661,7 @@ LoRATriggerReader v1.3.0
 | 真机自动反查 | 两个 `LoraLoader` 串联的链路上，妃咲（分数 **1005**）和 silver_wolf_lv999_comfy_v2（**975**）都被自动正确读出 |
 | 真机多重加载器（v1.3） | 同一台机器上验证：4 个下拉框与各自的 MODEL / CLIP 强度、以及「(高级) 批量文本」的强度都解析正确；`loader.load_tensor_cached` 真读一个 512 键的 `.safetensors`（首次 0.2s，第二次缓存命中 0.0000s）；两个真实 LoRA 依次叠加到 MODEL+CLIP；写了不存在的名字只产生一行 `加载失败` 报告、不抛异常 |
 | 真机接口与安装（v1.3） | 以 ComfyUI 的方式（`spec_from_file_location`，不带 `submodule_search_locations`）从 `custom_nodes/ComfyUI-LoRATriggerReader` 加载：4 个节点全部注册；`/lora_trigger_reader/help` 六个键都有中文与英文（`common` 中文 2551 字 / 英文 4406 字），未知节点名仍返回 `ok=true` + `exists=false` |
-| 单元测试 | **224** 个用例全绿（`test_lora_scan.py` 44 + `test_graph_probe.py` 35 + `test_loader.py` 56 + `test_nodes_api.py` 89） |
+| 单元测试 | **228** 个用例全绿（`test_lora_scan.py` 44 + `test_graph_probe.py` 39 + `test_loader.py` 56 + `test_nodes_api.py` 89） |
 | 示例工作流 | 用真实 ComfyUI 节点定义做过结构校验：13 个节点 / 18 条连线、每个节点的输入类型与输出槽位、连线的两端与登记信息全部通过 |
 | 前端脚本 | `node --check` 语法检查通过 |
 
@@ -694,7 +697,7 @@ ComfyUI-LoRATriggerReader/
 ├── README.zh-CN.md                # 中文说明（本文件）
 ├── requirements.txt               # 依赖说明（零第三方依赖）
 ├── pyproject.toml                 # ComfyUI Registry 发布元数据
-├── LICENSE                        # MIT
+├── LICENSE                        # GPL-3.0
 ├── .gitignore
 └── .github/workflows/
     ├── ci.yml                     # 单元测试 + JS 语法检查
@@ -762,13 +765,10 @@ python -m unittest discover -s tests -p "test_loader.py" -v
 
 ---
 
-## ⚠️ 开发与维护声明 / Development & Maintenance
-
-本插件的代码主要由生成式 AI 辅助编写。虽然作者进行了基本测试，但无法保证在所有环境和 ComfyUI 版本下都能稳定运行。本项目按“原样”提供，目前处于**随缘维护**状态，不保证及时更新或修复所有 Bug。
-遇到问题欢迎提 Issue 交流，也欢迎直接提交 PR 修复。
-
-The code for this plugin was primarily written with the assistance of generative AI. While basic testing has been conducted, stability across all environments and ComfyUI versions is not guaranteed. This project is provided "as-is" and is maintained on a best-effort basis. Feel free to open an Issue or submit a PR.
-
 ## 许可
 
-[GPL v3](LICENSE) —— 随便用，出问题自己负责 🙂
+Copyright (C) 2026 shuoyeldx
+
+[GPL-3.0](LICENSE) —— 自由软件：你可以按自由软件基金会发布的 **GNU 通用公共许可证**（第 3 版，或你自行选择的任何更新版本）再分发和/或修改本插件；本插件**不提供任何担保**，详见 [许可证全文](LICENSE)。
+
+> `LICENSE` 里的 GPL-3.0 正文必须**逐字保留**，不要在里面加自己的版权行——版权声明写在这里（或源码文件头）就好。

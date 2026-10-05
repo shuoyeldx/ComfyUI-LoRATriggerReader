@@ -153,6 +153,40 @@ class TestSplitNames(unittest.TestCase):
         self.assertEqual(graph_probe.split_names("a.safetensors, 0.8, 0.5"), ["a.safetensors"])
         self.assertEqual(graph_probe.split_names("a.safetensors: 0.8, 0.5"), ["a.safetensors"])
 
+    def test_structured_values_are_understood(self):
+        """rgthree Power Lora Loader 之类的第三方节点：一个输入里塞的就是对象。"""
+        self.assertEqual(
+            graph_probe.split_names({"on": True, "lora": "x.safetensors", "strength": 1.0}),
+            ["x.safetensors"],
+        )
+        self.assertEqual(
+            graph_probe.split_names(
+                [{"on": True, "lora": "a.safetensors"}, {"lora": "b.safetensors", "mode": "on"}]
+            ),
+            ["a.safetensors", "b.safetensors"],
+        )
+        # name / value / path 这些字段也能认出来；on / strength / weight 不会变成名字
+        self.assertEqual(
+            graph_probe.split_names({"enabled": True, "name": "sub/c.safetensors", "weight": 0.5}),
+            ["sub/c.safetensors"],
+        )
+        self.assertEqual(
+            graph_probe.split_names([{"lora": "a.safetensors"}, [{"lora": "b.safetensors"}], "c.safetensors"]),
+            ["a.safetensors", "b.safetensors", "c.safetensors"],
+        )
+
+    def test_json_strings_and_object_litter_are_handled(self):
+        self.assertEqual(graph_probe.split_names('{"lora": "d.safetensors", "on": true}'), ["d.safetensors"])
+        # 前端曾经把对象 String() 成这个字符串（界面上显示「检测到 1 个 LoRA: [object Object]」）
+        for value in ("[object Object]", "{'lora': 'e.safetensors'}", "[object Object], [object Object]"):
+            with self.subTest(value=value):
+                self.assertEqual(graph_probe.split_names(value), [])
+
+    def test_booleans_and_numbers_are_never_names(self):
+        for value in (True, False, 0, 1.0, [True, 0.8, None], {"on": True, "strength": 0.8}):
+            with self.subTest(value=value):
+                self.assertEqual(graph_probe.split_names(value), [])
+
 
 class TestIsLinkAndGetNode(unittest.TestCase):
     def test_is_link(self):
@@ -221,6 +255,31 @@ class TestIterLoraEntries(unittest.TestCase):
         entries = graph_probe.iter_lora_entries(prompt, "100")
         self.assertEqual([e["lora_name"] for e in entries], ["one.safetensors", "two.safetensors"])
         self.assertEqual({e["key"] for e in entries}, {"lora_1_name", "lora_2_name"})
+
+    def test_structured_third_party_lora_input(self):
+        """结构化 LoRA 控件值（Power Lora Loader 风格）不能变成 "{'on': True, ...}" 这种名字。"""
+        prompt = {
+            "1": {"class_type": "CheckpointLoaderSimple", "inputs": {}},
+            "2": {
+                "class_type": "Power Lora Loader (rgthree)",
+                "inputs": {
+                    "model": ["1", 0],
+                    "lora_1": {"on": True, "lora": "Krea2/妃咲.safetensors", "strength": 0.8},
+                    "lora_2": {"on": False, "lora": "none", "strength": 1.0},
+                },
+            },
+            "100": {"class_type": "LoRATriggerReader", "inputs": {"model": ["2", 0]}},
+        }
+        entries = graph_probe.iter_lora_entries(prompt, "100")
+        self.assertEqual([e["lora_name"] for e in entries], ["Krea2/妃咲.safetensors"])
+        self.assertEqual([e["key"] for e in entries], ["lora_1"])
+        result = graph_probe.probe_prompt(prompt, "100")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["loras"], ["Krea2/妃咲.safetensors"])
+        text = graph_probe.describe_sources(result)
+        self.assertIn("Krea2/妃咲.safetensors", text)
+        self.assertNotIn("[object Object]", text)
+        self.assertNotIn("'on'", text)
 
     def test_widget_converted_to_input_is_followed(self):
         """widget 被转成输入端（连到 PrimitiveNode）时也能找回字符串。"""

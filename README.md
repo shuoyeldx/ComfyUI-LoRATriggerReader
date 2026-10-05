@@ -4,7 +4,7 @@
 
 **English** | [中文 / Chinese](README.zh-CN.md)
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+![license](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![deps](https://img.shields.io/badge/dependencies-zero%20third--party-brightgreen)
 ![nodes](https://img.shields.io/badge/nodes-4-orange)
@@ -618,6 +618,9 @@ Add a `LoRA 触发词查看` node with a text display and read `report`:
 - "空文件" (empty file) → your txt is 0 bytes; fill it in;
 - "找不到文件" (file not found) → the LoRA name is not in the directory (possibly a stale cache); tick `refresh_cache` or press the frontend "rescan" button.
 
+**Q: The node status line says `检测到 1 个 LoRA: [object Object]`.**
+That happened when the upstream LoRA node stores something other than a plain string in its widget — e.g. rgthree's **Power Lora Loader**, whose input holds `{on: true, lora: "x.safetensors", strength: 0.8}`. **Fixed in v1.3**: both the frontend and the backend now parse such structured values by field name (`lora` / `name` / `value` / `path` …) and skip boolean / weight fields (`on`, `strength`, …), so the status line and the `report` always show the real file name instead of a `String()`-ified object. Refresh the page (or restart ComfyUI) to pick the fix up.
+
 **Q: Nothing is detected on the chain / the node says `🔎 未接入 MODEL…`.**
 That means the `model` input has no wire. Connect the `MODEL` output of the LoRA loader that you want read. If the node instead says `🔎 已接入，但链路上没识别到 LoRA`, the LoRA is probably selected by a node whose input names the probe does not recognise (for example a sub-workflow) — fill in `extra_loras`, or use the picker and press "选定链路项".
 
@@ -680,9 +683,9 @@ No. The node only passes the model through; the LoRA is loaded by the upstream `
 | Real-world auto-probe | Verified on a real machine: on a chain of two `LoraLoader` nodes, `妃咲` (score 1005) and `silver_wolf_lv999_comfy_v2` (975) were both read out correctly |
 | Real-world multi loader | Verified on the same machine: `lora_list` / dropdown-row strengths parsed against the real directory, a real 512-key `.safetensors` loaded through `load_tensor_cached` (0.04 s first time, 0.0000 s from cache), two real LoRAs applied to MODEL+CLIP, and a nonexistent name only produced a `加载失败` report line |
 | Real-world help / install | Loaded from `custom_nodes/ComfyUI-LoRATriggerReader` exactly the way ComfyUI loads it (no `submodule_search_locations`): 4 nodes registered, and `/lora_trigger_reader/help` returns Chinese **and** English text for all six node keys (unknown key → `ok: true`, `exists: false`) |
-| Unit tests | **224** test cases, all green (`test_lora_scan.py` 44, `test_graph_probe.py` 35, `test_loader.py` 56, `test_nodes_api.py` 89). Run with `python -m unittest discover -s tests` from the extension folder |
+| Unit tests | **228** test cases, all green (`test_lora_scan.py` 44, `test_graph_probe.py` 39, `test_loader.py` 56, `test_nodes_api.py` 89). Run with `python -m unittest discover -s tests` from the extension folder |
 
-Edge cases covered: empty files, GBK/UTF-16/BOM encodings, truncation past 1 MiB, comment lines, full-width trailing commas, duplicate words, ownership conflicts, short-name hijacking, `extra_dirs`, the three `on_missing` strategies, comma-separated multi-LoRA lines, auto-completion of bare filenames / character names, widget-to-input conversion, cyclic graphs, and unknown input names on the chain. The loader additionally covers strength parsing (colon / full-width colon / `@` / comma / space form / A1111 `<lora:…>`), strength-suffix stripping in `extra_loras`, out-of-range clamping, the 64-entry cap, missing files, cache hits and eviction, the four dropdown slots (including the `不使用 / none` sentinel and their per-row MODEL / CLIP strengths), and the "neither MODEL nor CLIP connected" path.
+Edge cases covered: empty files, GBK/UTF-16/BOM encodings, truncation past 1 MiB, comment lines, full-width trailing commas, duplicate words, ownership conflicts, short-name hijacking, `extra_dirs`, the three `on_missing` strategies, comma-separated multi-LoRA lines, auto-completion of bare filenames / character names, widget-to-input conversion, cyclic graphs, and unknown input names on the chain. The loader additionally covers strength parsing (colon / full-width colon / `@` / comma / space form / A1111 `<lora:…>`), strength-suffix stripping in `extra_loras`, out-of-range clamping, the 64-entry cap, missing files, cache hits and eviction, the four dropdown slots (including the `不使用 / none` sentinel and their per-row MODEL / CLIP strengths), the "neither MODEL nor CLIP connected" path, and structured (dict / list) LoRA widget values from third-party loaders such as rgthree's Power Lora Loader — those are parsed by field name (`lora` / `name` / `value` / `path`…, never `on` / `strength`), so the node status line shows the real file name instead of `[object Object]`.
 
 ---
 
@@ -714,7 +717,7 @@ ComfyUI-LoRATriggerReader/
 ├── README.zh-CN.md                # Chinese documentation
 ├── requirements.txt               # Dependency note (zero third-party deps)
 ├── pyproject.toml                 # ComfyUI Registry publishing metadata
-├── LICENSE                        # MIT
+├── LICENSE                        # GPL-3.0
 ├── .gitignore
 └── .github/workflows/
     ├── ci.yml                     # Unit tests + JS syntax check
@@ -784,24 +787,19 @@ python -m unittest discover -s tests -p "test_loader.py" -v
 
 ## Publishing checklist
 
-This repository ships with placeholders you must replace before publishing:
+This project is released under the **GPL-3.0** (full text in `LICENSE`). Before cutting a release:
 
-- `pyproject.toml` → `[tool.comfy] PublisherId` (`your-publisher-id`);
-- this README (and `README.zh-CN.md`) → `https://github.com/your-name/ComfyUI-LoRATriggerReader`;
-- `LICENSE` → the copyright line;
-- *(optional)* add an `icon.png` to the repository root and un-comment `[tool.comfy] Icon` if you want a registry icon.
+- **copyright**: the `LICENSE` file holds the GNU GPL-3.0 text and must stay **verbatim** — do not edit it. Put your own copyright notice in the README (see below) or in the source headers instead;
+- **ComfyUI Registry**: `pyproject.toml` currently has **no `[tool.comfy]` section** — the registry requires `PublisherId` there (and `DisplayName` is recommended). The bundled `publish.yml` only runs when `pyproject.toml` changes, so bump `version` in the same commit;
+- bump the version everywhere at once: `pyproject.toml`, the root `__init__.py`, `lora_trigger_reader/lora_scan.py` and `web/js/lora_trigger_reader.js`;
+- *(optional)* add an `icon.png` to the repository root and set `[tool.comfy] Icon` if you want a registry icon.
 
 Note that `pyproject.toml` **deliberately omits `web`** from `[tool.comfy]`: `__init__.py` already declares `WEB_DIRECTORY = "./web"`, and registering the frontend twice would load the same script twice.
 
 ---
 
- ## ⚠️ 开发与维护声明 / Development & Maintenance
-
-本插件的代码主要由生成式 AI 辅助编写。虽然作者进行了基本测试，但无法保证在所有环境和 ComfyUI 版本下都能稳定运行。本项目按“原样”提供，目前处于**随缘维护**状态，不保证及时更新或修复所有 Bug。
-遇到问题欢迎提 Issue 交流，也欢迎直接提交 PR 修复。
-
-The code for this plugin was primarily written with the assistance of generative AI. While basic testing has been conducted, stability across all environments and ComfyUI versions is not guaranteed. This project is provided "as-is" and is maintained on a best-effort basis. Feel free to open an Issue or submit a PR.
-
 ## License
 
-[GPL v3](LICENSE) — use it however you like, no warranty 🙂
+Copyright (C) 2026 shuoyeldx
+
+[GPL-3.0](LICENSE) — free software: you may redistribute and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. Distributed in the hope that it will be useful, but **without any warranty** — see the [full text](LICENSE).

@@ -121,6 +121,12 @@ LoRA 的触发词（trigger words）通常写在 loras 目录里一个同名的 
       - 如果 LoRA 是在子工作流 / 第三方节点里加载的，用 extra_loras（自动节点）
         或下拉框（加载器）手动选上即可。
   * 报告说"没有读到任何 LoRA"？同上，或者 LoRA 名字写错了（可只写文件名）。
+  * 状态行显示「检测到 1 个 LoRA: [object Object]」？
+      - 这是第三方 LoRA 节点把结构化值塞进控件导致的（例如 rgthree 的 Power Lora
+        Loader，一个输入里存 {"on": true, "lora": "x.safetensors", "strength": 0.8}）；
+      - v1.3 起前端与后端都会按字段名（lora / name / value / path …）解析这种值，
+        并跳过 on / strength 之类的开关与权重字段，所以只会显示真实文件名；
+        刷新页面（或重启 ComfyUI）后生效。
   * 触发词没读出来？
       - 确认文本文件在 loras 目录下（或写进 extra_dirs）；
       - 确认文件名带上了 LoRA 的名字（例如 妃咲.txt、妃咲提示词.txt）；
@@ -207,6 +213,14 @@ Protection rules (avoid wrong matches):
         extra_loras (auto nodes) or pick it in the dropdown (loader) manually.
   * Report says "没有读到任何 LoRA"? Same as above, or the name is wrong
     (you may write just the file name).
+  * Status line shows "检测到 1 个 LoRA: [object Object]"?
+      - that happens when a third-party LoRA node stores a structured value in
+        its widget (e.g. rgthree's Power Lora Loader holds
+        {"on": true, "lora": "x.safetensors", "strength": 0.8});
+      - since v1.3 the frontend and the backend both parse such values by field
+        name (lora / name / value / path ...) and skip booleans / weights
+        (on, strength, ...), so only the real file name is shown -- refresh the
+        page (or restart ComfyUI) to pick it up.
   * No trigger words?
       - make sure the text file lives under a loras root (or add extra_dirs);
       - make sure the file name contains the LoRA name (e.g. 妃咲.txt);

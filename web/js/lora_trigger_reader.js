@@ -143,7 +143,9 @@ function parseLines(text) {
 }
 
 function baseName(name) {
-  const s = String(name || "").replace(/\\/g, "/");
+  // 非字符串一律返回空串：绝不让 "[object Object]" / "undefined" 漏到界面上
+  if (name === null || name === undefined || typeof name === "object") return "";
+  const s = String(name).replace(/\\/g, "/");
   const i = s.lastIndexOf("/");
   return i >= 0 ? s.slice(i + 1) : s;
 }
@@ -220,42 +222,80 @@ function isBlockedValue(s) {
   const t = String(s || "").trim();
   if (!t) return true;
   if (/^<.*>$/.test(t)) return true; // <未检测到 LoRA> 之类的占位
+  if (/^\[object [^\]]*\]$/i.test(t)) return true; // "[object Object]" 这种被 String() 出来的垃圾
   if (/^(none|null|undefined|无|未选择|请选择|未检测到)$/i.test(t)) return true;
   return false;
 }
 
-/** 从一个 widget 的值里抽出可能的所有 LoRA 名字（支持数组 / JSON 串 / 多行 / 逗号）。 */
+/* 结构化的第三方 LoRA 控件值（例如 rgthree Power Lora Loader 的一个输入里塞
+ * {"on": true, "lora": "x.safetensors", "strength": 1.0}）：
+ * 下面两张表决定从哪个字段取名字、哪些字段一定不是名字。
+ * 老代码对这种值是先 String(value) -> "[object Object]" 再当名字，界面上就会出现
+ * 「检测到 1 个 LoRA: [object Object]」——这就是要修的那个显示 bug。 */
+const LORA_NAME_KEYS = [
+  "lora", "lora_name", "loraname", "lora_path", "lora_file", "lora_filename",
+  "name", "value", "file", "filename", "file_name", "path", "base", "title",
+];
+const LORA_META_KEYS = [
+  "on", "enabled", "active", "mode", "id", "type", "class_type", "widgets_values",
+  "strength", "strength_model", "strength_clip", "clip_strength", "weight",
+];
+
+/** 从一个 widget 的值里抽出所有 LoRA 名字（字符串 / 数组 / 对象 / JSON 串 / 多行 / 逗号都支持）。 */
 function extractLoraNames(value) {
   const out = [];
-  const push = (v) => {
-    if (v === null || v === undefined) return;
-    if (typeof v === "object") {
-      const walk = (x) => {
-        if (Array.isArray(x)) x.forEach(walk);
-        else if (x && typeof x === "object") Object.keys(x).forEach((k) => walk(x[k]));
-        else push(x);
-      };
-      walk(v);
-      return;
-    }
-    let s = stripStrength(String(v));
+  const add = (v) => {
+    if (typeof v !== "string") return; // 布尔 / 数字（on: true、strength: 0.8）不是名字
+    const s = stripStrength(v);
     if (isBlockedValue(s)) return;
     if (NUMBER_ONLY_RE.test(s)) return; // "a.safetensors, 0.8" 里被逗号拆出来的强度值
     if (out.indexOf(s) === -1) out.push(s);
   };
-
-  const raw = String(value === null || value === undefined ? "" : value).trim();
-  if (!raw) return out;
-  if (raw[0] === "{" || raw[0] === "[") {
-    try {
-      JSON.parse(raw);
-      push(JSON.parse(raw));
-      if (out.length) return out;
-    } catch (err) {
-      /* 不是 JSON，按普通文本继续处理 */
+  const fromText = (text) => {
+    const t = String(text).trim();
+    if (!t) return;
+    if (t[0] === "{" || t[0] === "[") {
+      try {
+        walk(JSON.parse(t));
+      } catch (err) {
+        /* 不是合法 JSON（"[object Object]" 之类）→ 直接丢掉，别当名字 */
+      }
+      return;
     }
-  }
-  raw.split(/[\n\r,;，；、]+/).forEach(push);
+    t.split(/[\n\r,;，；、]+/).forEach(add);
+  };
+  const walk = (v) => {
+    if (v === null || v === undefined) return;
+    if (typeof v === "string") {
+      fromText(v);
+      return;
+    }
+    if (Array.isArray(v)) {
+      v.forEach(walk);
+      return;
+    }
+    if (typeof v === "object") {
+      const preferred = [];
+      const others = [];
+      Object.keys(v).forEach((k) => {
+        const item = v[k];
+        if (item === null || item === undefined) return;
+        if (LORA_META_KEYS.indexOf(k) >= 0) return; // on / strength / mode … 不是名字
+        if (typeof item === "object") {
+          walk(item);
+          return;
+        }
+        if (typeof item === "string") {
+          (LORA_NAME_KEYS.indexOf(k) >= 0 ? preferred : others).push(item);
+        }
+      });
+      // 名字类字段优先（lora / name / value / path…），其余字符串兜底
+      preferred.concat(others).forEach(fromText);
+      return;
+    }
+    /* 布尔 / 数字：丢掉 */
+  };
+  walk(value);
   return out;
 }
 
@@ -314,6 +354,13 @@ function detectUpstreamLoras(node, maxDepth) {
     depth++;
   }
   return found;
+}
+
+/** 面板 / 提示里的「#节点名 文件名」标签（名字取不到时给占位，不显示 undefined / [object Object]）。 */
+function chainLabel(item) {
+  if (!item) return "";
+  const name = baseName(item.name || item.lora || item.lora_name || "") || "（名字未识别）";
+  return item.node_id === undefined || item.node_id === null ? name : `#${item.node_id} ${name}`;
 }
 
 /** 带 1 秒缓存的检测结果（画节点时会被高频调用）。 */
@@ -517,12 +564,12 @@ function openPicker(app, node, mode) {
       (own.length ? `<br/>当前已选 ${own.length} 个。` : `<br/>当前为空：都留空时节点会自动使用接入链路上的 LoRA。`) +
       (chain.length
         ? `<br/>model 连线上检测到 <b>${chain.length}</b> 个 LoRA：` +
-          `${chain.map((c) => `#${c.node_id} ${c.name}`).join(" · ")}`
+          `${chain.map(chainLabel).join(" · ")}`
         : "");
   } else if (chain.length) {
     noteEl.innerHTML =
       `已在 model 连线上自动检测到 <b>${chain.length}</b> 个 LoRA：` +
-      `${chain.map((c) => `#${c.node_id} ${c.name}`).join(" · ")}<br/>` +
+      `${chain.map(chainLabel).join(" · ")}<br/>` +
       `下面勾选的是 <b>额外补充</b>（写回 ${AUTO_WIDGET}），一般留空即可。`;
   } else {
     noteEl.innerHTML =
@@ -952,7 +999,13 @@ function drawStatusLine(ctx, node) {
   let text;
   let color = "#9a9aa8";
   const chain = detectedLoras(node);
-  const short = (list) => list.map((c) => baseName(c.name || c)).join(", ");
+  /* 显示用：只画真实文件名的 basename，拿不到名字时给个占位，绝不出现 "[object Object]" */
+  const short = (list) => {
+    const names = list
+      .map((c) => baseName(typeof c === "object" && c !== null ? c.name || c.lora || c.lora_name || "" : c))
+      .filter((s) => s && !/^\[object [^\]]*\]$/i.test(s));
+    return names.length ? names.join(", ") : "（名字未识别）";
+  };
 
   if (typeOf(node) === NODE_LOADER) {
     // 多重加载器：优先看下拉框 + 批量文本框里写了什么，都为空时才用链路检测结果

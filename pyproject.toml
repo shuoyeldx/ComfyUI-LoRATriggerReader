@@ -11,6 +11,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
     "Topic :: Multimedia :: Graphics",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
 # 本插件零第三方依赖，详见 requirements.txt 的说明
 dependencies = []

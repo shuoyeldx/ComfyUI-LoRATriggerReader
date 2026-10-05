@@ -32,6 +32,7 @@ pysssss / efficiency 之类的第三方 LoRA 节点都能覆盖）。
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -84,6 +85,47 @@ _EMPTY_VALUES = frozenset(
 
 _SPLIT_RE = re.compile(r"[\n\r,;，；、]+")
 
+#: 有些第三方 LoRA 节点（rgthree Power Lora Loader、各种 stacker）一个输入里塞的是
+#: 结构化对象，例如 ``{"on": true, "lora": "x.safetensors", "strength": 1.0}``。
+#: 下面两组键名决定「从哪个字段取名字」/「哪些字段一定不是名字」——不然 ``str(dict)``
+#: 会把整段 ``{'on': True, 'lora': ...}`` 当成 LoRA 文件名（前端界面上的
+#: ``检测到 1 个 LoRA: [object Object]`` 就是同一个根因）。
+_LORA_NAME_KEYS = frozenset(
+    {
+        "lora",
+        "lora_name",
+        "loraname",
+        "lora_path",
+        "lora_file",
+        "lora_filename",
+        "name",
+        "value",
+        "file",
+        "filename",
+        "file_name",
+        "path",
+        "base",
+        "title",
+    }
+)
+_LORA_META_KEYS = frozenset(
+    {
+        "on",
+        "enabled",
+        "active",
+        "mode",
+        "id",
+        "type",
+        "class_type",
+        "widgets_values",
+        "strength",
+        "strength_model",
+        "strength_clip",
+        "clip_strength",
+        "weight",
+    }
+)
+
 #: ``a.safetensors: 0.8`` / ``a.safetensors @ 0.8`` 这类"名字 + 强度"的写法，只取名字部分。
 #: 只认 ``:`` / ``：`` / ``@`` 后面**全是数字**的情况，所以 Windows 路径
 #: ``C:\loras\x.safetensors`` 不会被误切。
@@ -106,26 +148,72 @@ def is_lora_key(key: Any) -> bool:
     return bool(_LORA_KEY_RE.match(k))
 
 
-def split_names(value: Any) -> List[str]:
-    """把 LoRA 选择器的值拆成一个个 LoRA 名字。
+def _names_from_value(value: Any, depth: int = 0) -> List[str]:
+    """从 dict / list 这类结构化值里挖出 LoRA 名字。
 
-    兼容：普通 ``lora_name``（单个文件名）、LoRA Stacker 的多行/逗号文本、
-    已经是 list 的情况、``"None"`` 之类的空值。
+    只认「像名字的字符串」：``on`` / ``strength`` 这类字段和布尔 / 数字一律跳过，
+    所以 ``{"on": True, "lora": "x.safetensors", "strength": 1.0}`` 只会得到
+    ``["x.safetensors"]``，不会得到 ``["{'on': True, ...}"]`` 这种垃圾。
     """
-    if value is None:
+    if depth > 4:
         return []
     if isinstance(value, (list, tuple)):
         out: List[str] = []
         for item in value:
-            out.extend(split_names(item))
+            out.extend(_names_from_value(item, depth + 1))
         return out
+    if isinstance(value, dict):
+        preferred: List[str] = []
+        others: List[str] = []
+        for key, item in value.items():
+            name = str(key).strip().lower()
+            if name in _LORA_META_KEYS:
+                continue
+            bucket = preferred if name in _LORA_NAME_KEYS else others
+            if isinstance(item, (dict, list, tuple)):
+                bucket.extend(_names_from_value(item, depth + 1))
+            elif isinstance(item, str):
+                bucket.append(item)
+            # 布尔 / 数字 / None：不是名字
+        out: List[str] = []
+        # 每个候选字符串都要走一遍 split_names：这样 "none" / "" / "a.safetensors: 0.8"
+        # 这些仍然按正常规则被过滤 / 拆开
+        for bucket in (preferred, others):
+            for text in bucket:
+                out.extend(split_names(text))
+        return out
+    if isinstance(value, str):
+        return split_names(value)
+    return []
+
+
+def split_names(value: Any) -> List[str]:
+    """把 LoRA 选择器的值拆成一个个 LoRA 名字。
+
+    兼容：普通 ``lora_name``（单个文件名）、LoRA Stacker 的多行/逗号文本、
+    结构化值（``[{"on": true, "lora": "x.safetensors"}]``，第三方 LoRA 节点常见）、
+    已经是 list 的情况、``"None"`` / 「不使用 / none」之类的空值。
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, dict)):
+        return _names_from_value(value)
     if not isinstance(value, str):
-        if isinstance(value, (int, float)):
+        if isinstance(value, (bool, int, float)):
             return []
         value = str(value)
 
+    text = value.strip()
+    if text[:1] in ("{", "["):
+        # 值本身就是一段 JSON（前端把结构化值序列化后塞进文本框）；
+        # 解析不了（例如 "[object Object]"）就当作没选，别把垃圾当文件名
+        try:
+            return _names_from_value(json.loads(text))
+        except (ValueError, TypeError):
+            return []
+
     out = []
-    for raw in _SPLIT_RE.split(value):
+    for raw in _SPLIT_RE.split(text):
         piece = raw.strip().strip('"').strip("'").strip()
         # 允许 # 注释（有些 stack 文本里会带）
         if "#" in piece:
