@@ -4,7 +4,7 @@
 
 **English** | [中文 / Chinese](README.zh-CN.md)
 
-![license](https://img.shields.io/badge/license-MIT-green)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 ![python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![deps](https://img.shields.io/badge/dependencies-zero%20third--party-brightgreen)
 ![nodes](https://img.shields.io/badge/nodes-4-orange)
